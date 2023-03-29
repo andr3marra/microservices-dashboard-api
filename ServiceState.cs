@@ -49,10 +49,12 @@ namespace microservices_dashboard_api {
 
                     if (response == null) { continue; }
 
-                    foreach (var alias in service.Value.Aliases) {
-                        if (response.Results.TryGetValue(alias.Key, out var result)) {
-                            response.Results.Remove(alias.Key);
-                            response.Results.Add(alias.Value, result);
+                    if (service.Value.Aliases != null) {
+                        foreach (var alias in service.Value.Aliases) {
+                            if (response.Results.TryGetValue(alias.Key, out var result)) {
+                                response.Results.Remove(alias.Key);
+                                response.Results.Add(alias.Value, result);
+                            }
                         }
                     }
 

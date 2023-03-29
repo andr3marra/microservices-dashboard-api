@@ -1,8 +1,8 @@
 {
   "Services": {
     "d6d7da50-fb7d-4796-8ffd-e32c0f77091a": {
-      "Name": "Service Fortaleza",
-      "Url": "http://localhost:5057/serviceFortaleza",
+      "Name": "Service Bahia",
+      "Url": "http://localhost:5057/serviceBahia",
       "Metadata": [
         "Admin Panel: www.websocket-gateway.uat.btg.com/connections",
         "Kibana Dashboard : www.kibana.com/search?dasdasjkdjaslk"
@@ -12,8 +12,8 @@
       }
     },
     "d6d7da50-fb7d-4796-8ffd-e32c0f77091b": {
-      "Name": "Service AmazonasS",
-      "Url": "http://localhost:5057/serviceAmazonas",
+      "Name": "Service Rio de Janeiro",
+      "Url": "http://localhost:5057/serviceRioDeJaneiro",
       "Metadata": [
         "Admin Panel: www.websocket-gateway.uat.btg.com/connections",
         "Kibana Dashboard : www.kibana.com/search?dasdasjkdjaslk"
@@ -23,26 +23,23 @@
       }
     },
     "d6d7da50-fb7d-4796-8ffd-e32c0f77091c": {
-      "Name": "Service Gateway",
-      "Url": "http://localhost:5057/serviceGateway",
+      "Name": "Service Brasil",
+      "Url": "http://localhost:5057/serviceBrasil",
       "Metadata": [
         "Admin Panel: www.websocket-gateway.uat.btg.com/connections",
         "Kibana Dashboard : www.kibana.com/search?dasdasjkdjaslk"
       ],
       "Aliases": {
-        "Service Amazonas": "Service AmazonasS"
+        "Service São Paulo(SP)": "Service São Paulo"
       }
     },
     "d6d7da50-fb7d-4796-8ffd-e32c0f77091d": {
-      "Name": "Service Mato Grosso do Sul",
-      "Url": "http://localhost:5057/serviceMatoGrossoDoSul",
+      "Name": "Service São Paulo",
+      "Url": "http://localhost:5057/serviceSaoPaulo",
       "Metadata": [
         "Admin Panel: www.websocket-gateway.uat.btg.com/connections",
         "Kibana Dashboard : www.kibana.com/search?dasdasjkdjaslk"
-      ],
-      "Aliases": {
-        "Service Amazonas": "Service AmazonasS"
-      }
+      ]
     }
   }
 }
