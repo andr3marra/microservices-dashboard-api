@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Net.Http;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace microservices_dashboard_api {
     public class ServiceState {
@@ -10,7 +12,7 @@ namespace microservices_dashboard_api {
         public Uri Url { get; set; }
         public HealthStatus HealthStatus { get; set; }
         public string Description { get; set; }
-        public List<string>? Metadata { get; set; }
+        public IEnumerable<string> Tags { get; set; }
     }
 
     public class ServiceStateRepository : IHostedService {
@@ -37,32 +39,47 @@ namespace microservices_dashboard_api {
         }
 
 
-
         public async Task DoWork(CancellationToken cancellationToken = default) {
             var bla = new PeriodicTimer(TimeSpan.FromSeconds(30));
             do {
+                try {
+                    foreach (var service in healthCheckConfig.Services) {
 
-                foreach (var service in healthCheckConfig.Services) {
+                        var httpClient1 = new HttpClient();
+                        httpClient.Timeout = TimeSpan.FromSeconds(10);
 
-                    var httpClient1 = new HttpClient();
-                    var response = await httpClient1.GetFromJsonAsync<HealthCheckResponse>(service.Value.Url, cancellationToken);
+                        var response1 = await httpClient1.GetAsync(service.Value.Url, cancellationToken);
 
-                    if (response == null) { continue; }
+                        var responseString = await response1.Content.ReadAsStringAsync();
 
-                    if (service.Value.Aliases != null) {
-                        foreach (var alias in service.Value.Aliases) {
-                            if (response.Results.TryGetValue(alias.Key, out var result)) {
-                                response.Results.Remove(alias.Key);
-                                response.Results.Add(alias.Value, result);
+                        var converter = new JsonStringEnumConverter();
+
+                        var options = new JsonSerializerOptions {
+                            PropertyNameCaseInsensitive = true
+                        };
+                        options.Converters.Add(converter);
+
+                        var response = JsonSerializer.Deserialize<MyHealthReport>(responseString, options);
+
+                        if (response == null) { continue; }
+
+                        if (service.Value.Aliases != null) {
+                            foreach (var alias in service.Value.Aliases) {
+                                if (response.Entries.TryGetValue(alias.Key, out var result)) {
+                                    //response.Results.Remove(alias.Key);
+                                    //response.Results.Add(alias.Value, result);
+                                }
                             }
                         }
+
+                        Update(service.Key, response);
                     }
 
-                    Update(service.Key, response);
-                }
+                    foreach (var service in healthCheckConfig.Services) {
+                        if (service.Value.Aliases?.Any() != true) { continue; }
 
-                foreach (var service in healthCheckConfig.Services) {
-                    if (service.Value.Aliases?.Any() != true) { continue; }
+                    }
+                }catch(Exception ex) {
 
                 }
 
@@ -84,7 +101,7 @@ namespace microservices_dashboard_api {
         }
 
 
-        internal void Update(Guid parentId, HealthCheckResponse response) {
+        internal void Update(Guid parentId, MyHealthReport response) {
 
             if (!States.TryGetValue(parentId, out var state)) {
                 state = new ServiceState() { Id = parentId };
@@ -96,9 +113,9 @@ namespace microservices_dashboard_api {
 
             var childToBeUpdated = States.Values.Where(x => x.ParentId == parentId);
 
-            var newChilds = response.Results.Where(x => !childToBeUpdated.Any(y => y.Name == x.Key));
+            var newChilds = response.Entries.Where(x => !childToBeUpdated.Any(y => y.Name == x.Key));
 
-            var childThatHaveReturned = childToBeUpdated.Where(x => response.Results.ContainsKey(x.Name));
+            var childThatHaveReturned = childToBeUpdated.Where(x => response.Entries.ContainsKey(x.Name));
 
             var childThatHaveNotReturned = childToBeUpdated.Except(childThatHaveReturned);
 
@@ -111,13 +128,14 @@ namespace microservices_dashboard_api {
             }
             // FOUND CHILDS
             foreach (var item in childThatHaveReturned) {
-                if (!response.Results.TryGetValue(item.Name, out var result)) {
+                if (!response.Entries.TryGetValue(item.Name, out var result)) {
                     // LOG UNEXPECTED
                     continue;
                 }
                 item.HealthStatus = result.Status;
                 item.Description = result.Description;
-                item.Metadata = result.Data;
+                item.Tags = result.Tags;
+                //item.Metadata = result.Data;
             }
 
             foreach (var item in newChilds) {
@@ -128,7 +146,7 @@ namespace microservices_dashboard_api {
                 serviceState.Name = item.Key;
                 serviceState.HealthStatus = item.Value.Status;
                 serviceState.Description = item.Value.Description;
-                serviceState.Metadata = item.Value.Data;
+                serviceState.Tags = item.Value.Tags;
 
                 States.Add(serviceState.Id, serviceState);
             }
@@ -137,14 +155,42 @@ namespace microservices_dashboard_api {
 }
 
 
-public class Result {
+public class MyHealthReport {
+    public MyHealthReport() {
+
+    }
+
+    public IReadOnlyDictionary<string, MyHealthReportEntry> Entries { get; set; }
     public HealthStatus Status { get; set; }
-    public string Description { get; set; }
-    public List<string> Data { get; set; }
+    public TimeSpan TotalDuration { get; set; }
 }
 
-public class HealthCheckResponse {
+public class MyHealthReportEntry {
+    public MyHealthReportEntry()
+    {
+        
+    }
+
+    private static readonly IReadOnlyDictionary<string, object> _emptyReadOnlyDicionary = new Dictionary<string, object>();
+    public MyHealthReportEntry(HealthStatus status, string? description, TimeSpan duration, Exception? exception, IReadOnlyDictionary<string, object>? data):this(status, description, duration, exception,data, null)
+    {
+        
+    }
+
+    public MyHealthReportEntry(HealthStatus status, string? description, TimeSpan duration, Exception? exception, IReadOnlyDictionary<string, object>? data, IEnumerable<string>? tags = null) {
+        Status = status;
+        Description = description;
+        Duration = duration;
+        Exception = exception;
+        Data = data ?? _emptyReadOnlyDicionary;
+        Tags = tags ?? Enumerable.Empty<string>();
+    }
+
+    public IReadOnlyDictionary<string, object> Data { get; set; }
+    public string? Description { get; set; }
+    public TimeSpan Duration { get; set; }
+    public Exception? Exception { get; set; }
     public HealthStatus Status { get; set; }
-    public Dictionary<string, Result> Results { get; set; }
+    public IEnumerable<string> Tags { get; set; }
 }
 
