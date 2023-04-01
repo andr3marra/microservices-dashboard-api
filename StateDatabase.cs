@@ -7,6 +7,6 @@
         public string Name { get; set; }
         public Uri Url { get; set; }
         //public List<string>? Metadata { get; set; }
-        public Dictionary<string,string>? Aliases { get; set; }
+        public Dictionary<string, string>? Aliases { get; set; }
     }
 }
