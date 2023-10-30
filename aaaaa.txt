@@ -1,0 +1,205 @@
+version: "3.7"
+services:
+  collector-gateway:
+   image: otel/opentelemetry-collector-contrib:latest
+   hostname: collector
+   volumes:
+     - ./collector-config.yaml:/etc/collector-config.yaml
+   command: [ "--config=/etc/collector-config.yaml" ]
+   ports:
+     - "1888:1888"   # pprof extension
+     - "13133:13133" # health_check extension
+     - "4317:4317"        # OTLP gRPC receiver
+     - "4318:4318"        # OTLP HTTP receiver
+     - "55670:55679" # zpages extension
+      
+volumes:
+  esdata:
+    driver: local
+
+
+
+receivers:
+ otlp:
+   protocols:
+     http:
+       endpoint: 0.0.0.0:4318
+     grpc:
+       endpoint: 0.0.0.0:4317
+processors:
+ batch:
+   timeout: 1s
+ resource:
+   attributes:
+     - key: test.key
+       value: "test-value"
+       action: insert
+exporters:
+ logging:
+   loglevel: info
+ otlphttp:
+    endpoint: http://apm-server:8200
+extensions:
+ health_check:
+ pprof:
+   endpoint: :1888
+ zpages:
+   endpoint: :55679
+service:
+ extensions: [pprof, zpages, health_check]
+ pipelines:
+  traces:
+    receivers: [otlp]
+    processors: [batch, resource]
+    exporters: [logging, otlphttp]
+  metrics:
+    receivers: [otlp]
+    exporters: [logging, otlphttp]
+  logs: 
+    receivers: [otlp]
+    exporters: [logging, otlphttp
+
+
+
+
+
+version: '3.7'
+services:
+  # Elasticsearch Docker Images: https://www.docker.elastic.co/
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.2
+    container_name: elasticsearch
+    environment:
+      - xpack.security.enabled=false
+      - discovery.type=single-node
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+      - 9300:9300
+  kibana:
+    container_name: kibana
+    image: docker.elastic.co/kibana/kibana:7.10.2
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    volumes:
+      - kibana-data:/usr/share/kibana/data
+    ports:
+      - 5601:5601
+    depends_on:
+      - elasticsearch
+  apm-server:
+    image: docker.elastic.co/apm/apm-server:7.10.2
+    container_name: apm-server
+    ports:
+      - '8200:8200'
+      - '1514:1514/udp'
+    environment:
+      - output.elasticsearch.hosts=[elasticsearch:9200]
+      - apm-server.secret_token=${ELASTIC_APM_SECRET_TOKEN}
+    volumes:
+      - apm-data:/usr/share/apm/data
+    # volumes:
+    #   - './apm-server/config/apm-server.yml:/usr/share/apm-server/apm-server.yml:ro'
+    depends_on:
+      - elasticsearch
+  collector-gateway:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: collector
+    volumes:
+      - ./collector-config.yaml:/etc/collector-config.yaml
+    command: [ "--config=/etc/collector-config.yaml" ]
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://apm-server:8200
+    ports:
+      - "1888:1888"   # pprof extension
+      - "13133:13133" # health_check extension
+      - "4317:4317"        # OTLP gRPC receiver
+      - "4318:4318"        # OTLP HTTP receiver
+      - "55670:55679" # zpages extension
+volumes:
+  elasticsearch-data:
+    driver: local
+  kibana-data:
+    driver: local
+  apm-data:
+    driver: local
+
+
+
+
+
+
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Elastic.Apm.NetCoreAll;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+
+builder.Services.AddControllers();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resourceBuilder =>
+        resourceBuilder
+            .AddService("weather-forecast-api-oltp", "weather-oltp", serviceInstanceId: Environment.MachineName)
+            .AddTelemetrySdk()
+    )
+    .WithTracing(tracerProviderBuilder =>
+        tracerProviderBuilder
+            .AddOtlpExporter(o =>
+            {
+                o.Endpoint = new Uri("http://localhost:4317");
+                o.Protocol = OtlpExportProtocol.Grpc;
+            })
+            .AddHttpClientInstrumentation()
+            .AddAspNetCoreInstrumentation()
+    )
+    .WithMetrics(meterProviderBuilder =>
+        meterProviderBuilder
+            .AddAspNetCoreInstrumentation()
+            .AddRuntimeInstrumentation()
+            .AddProcessInstrumentation()
+            .AddAspNetCoreInstrumentation()
+            .AddEventCountersInstrumentation()
+            .AddOtlpExporter(o =>
+            {
+                o.Endpoint = new Uri("http://localhost:4317");
+                o.Protocol = OtlpExportProtocol.Grpc;
+            })
+    );
+
+var app = builder.Build();
+
+//app.UseAllElasticApm(app.Configuration);
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
